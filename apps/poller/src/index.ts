@@ -7,9 +7,9 @@ interface PRICE_DATA {
 }
 
 const redisClient = new Redis({
-  port:6379,
-  host:"localhost"
- })
+  port: 6379,
+  host: "localhost",
+});
 
 const latestPrice: Map<string, PRICE_DATA> = new Map();
 
@@ -21,31 +21,26 @@ const ASSETS = {
 let ws: WebSocket;
 
 function connectToBackPack() {
-
   ws = new WebSocket("wss://ws.backpack.exchange/");
+  //open connection
   ws.on("open", () => {
     const streams = Object.values(ASSETS).map(
       (asset) => `ticker.${asset.symbol}`
-    );//what u need
-
-    ws.send(
-      JSON.stringify(
-        ws.send(JSON.stringify({ method: "SUBSCRIBE", params: streams }))
-      )
-    );//then ask
+    ); //what u need
+      ws.send(JSON.stringify({ method: "SUBSCRIBE", params: streams }));
   });
+  //this for getting whatever message the existing websocket is sending
   ws.on("message", (data: WebSocket.Data) => {
-    const parsedData = JSON.parse(data.toString());
+    const parsedData = JSON.parse(data.toString()); //string to json
 
     if (parsedData.stream && parsedData.stream.startsWith("ticker.")) {
       const price = parseFloat(parsedData.data.c);
       const symbol = parsedData.data.s;
-      console.log("symbol",symbol);
 
       const assetEntry = Object.entries(ASSETS).find(
         ([_, config]) => config.symbol === symbol
       ); //checks the symbol from websocket is it there in ASSETS and give matching config
-      console.log("assetEntry",assetEntry)
+      console.log("assetEntry", assetEntry);
       if (!assetEntry) {
         return;
       }
@@ -57,33 +52,30 @@ function connectToBackPack() {
         price: priceAsInt,
         decimal: config.decimal,
       });
-      console.log("Price",price)
+      console.log("Price", price);
     }
   });
-  ws.on("error",(error) => {
-    console.log(error,"Websocket error");
-  } )
+  ws.on("error", (error) => {
+    console.log(error, "Websocket error");
+  });
 }
 
-function startQueuePublisher(){
-  setInterval(async()=>{
-    if(latestPrice.size === 0){
+function startQueuePublisher() {
+  setInterval(async () => {
+    if (latestPrice.size === 0) {
       return;
     }
 
     const message = {
-      price_Updates : [...latestPrice.values()] //convert map into array
-    }
+      price_Updates: [...latestPrice.values()], //convert map into array
+    };
 
-    await redisClient.lpush("PriceQueue", JSON.stringify(message));
-    console.log('📤 Pushed to Queue:', JSON.stringify(message, null, 2));
-    const queueLength = await redisClient.llen('PriceQueue')
-    console.log("queueLength",queueLength);
-
-
-  },100)
+    await redisClient.xadd("queue", "*", "message", JSON.stringify(message));
+    console.log("📤 Pushed to Queue:", JSON.stringify(message, null, 2));
+    const queueLength = await redisClient.xlen("queue");
+    console.log("queueLength", queueLength);
+  }, 100);
 }
-
 
 connectToBackPack();
 startQueuePublisher();

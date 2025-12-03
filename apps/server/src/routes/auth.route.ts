@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { SignInSchema } from "../../types";
+import { SignInSchema } from "../types";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -22,7 +22,7 @@ authRouter.post("/signin", (req, res) => {
   res.json({ message: "signed in suceesfully" });
 });
 
-authRouter.get("/signin/post", (req, res) => {
+authRouter.get("/signin/post", async(req, res) => {
   const token = req.query.token as string;
   try {
     const email = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
