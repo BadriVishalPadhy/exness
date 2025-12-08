@@ -11,3 +11,7 @@ export const CreateNewOrder = z.object({
   leverage:z.number(),
   slippage:z.number()
 })
+
+export const ClosePosition = z.object({
+  orderId:z.string()
+})
