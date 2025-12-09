@@ -11,6 +11,7 @@ const redis = new Redis({
 
 const balances = new Map<string,number>();
 const supportedAssets = new Map<string, any>();
+const orders = new Map<string,any>();
 const tradeRouter: Router = Router();
 const pendingAcks = new Map<string,{resolve:Function,reject:Function}>;
 
@@ -23,6 +24,8 @@ function waitForAck(type:string,orderId:string,timeout=5000){
     setTimeout(() =>{reject("Time out")} ,timeout);
   })
 }
+
+
 async function startEngineConsumer(){
   console.log("startEngineConsumer has started . . .");
   let lastId = "0-0";
@@ -33,9 +36,84 @@ async function startEngineConsumer(){
       lastId
     )
     if(!result) continue; // message nahi mila phirse jao while pe
+
+    for( const[streamName,message] of result ){
+      for (const[id,fields] of message ){
+        lastId = id;
+
+        const data:Record<string,string> = {};
+        for(let i= 0;i < fields.length;i += 2 ){
+
+          const key = fields[i]!;
+          const value =fields[i+1]!;
+          data[key] = value;
+        }
+        switch(data.type){
+          case 'balance_update':
+            const key = `${data.userId}:${data.symbol}`;
+            balances.set(key,parseFloat(data.balance!));
+            break;
+
+         case 'order_created':
+          const order = JSON.parse(data.order!);
+          orders.set(data.orderId!,order);
+          console.log("order Created",data.orderId);
+          break;
+
+        case 'order_closed':
+          orders.delete(data.orderId!)
+          console.log("order deleted",data.orderId)
+          break;
+
+        case 'price_update':
+             if (!supportedAssets.has(data.asset!)) {
+                supportedAssets.set(data.asset!, {
+                  symbol: data.asset,
+                  name: getAssetName(data.asset!),
+                  imageUrl: `https://assets.example.com/${data.asset!.toLowerCase()}.png`
+                });
+              }
+              break;
+
+        case 'order_ack':
+              const ackKey = `order_ack:${data.orderId}`;
+              if (pendingAcks.has(ackKey)) {
+                const { resolve } = pendingAcks.get(ackKey)!;
+                resolve({
+                  success: data.success === 'true',
+                  status: data.status,
+                  reason: data.reason
+                });
+                pendingAcks.delete(ackKey);
+                console.log(`✅ Order ACK: ${data.orderId}`);
+              }
+              break;
+
+        case 'close_ack':
+              const closeKey = `close_ack:${data.orderId}`;
+              if (pendingAcks.has(closeKey)) {
+                const { resolve } = pendingAcks.get(closeKey)!;
+                resolve({
+                  success: data.success === 'true',
+                  reason: data.reason,
+                  pnl: data.pnl ? parseFloat(data.pnl) : undefined
+                });
+                pendingAcks.delete(closeKey);
+                console.log(`✅ Close ACK: ${data.orderId}`);
+              }
+              break;
+
+        }
+
+
+
+      }
+    }
   }
 
 }
+
+startEngineConsumer();
 
 tradeRouter.post("/trade/create", async (req, res) => {
   const parseResult = CreateNewOrder.safeParse(req.body);
