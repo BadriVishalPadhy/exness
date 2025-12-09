@@ -23,6 +23,19 @@ function waitForAck(type:string,orderId:string,timeout=5000){
     setTimeout(() =>{reject("Time out")} ,timeout);
   })
 }
+async function startEngineConsumer(){
+  console.log("startEngineConsumer has started . . .");
+  let lastId = "0-0";
+  while(true){
+    const result = await redis.xread(
+      'BLOCK',5000,
+      'STREAMS','ENGINE_UPDATES',
+      lastId
+    )
+    if(!result) continue; // message nahi mila phirse jao while pe
+  }
+
+}
 
 tradeRouter.post("/trade/create", async (req, res) => {
   const parseResult = CreateNewOrder.safeParse(req.body);
