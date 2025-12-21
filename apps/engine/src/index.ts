@@ -180,48 +180,48 @@ async function mainConsumer() {
       lastId = id;
 
       // Parse message
-   // Parse message
-const msg: any = {};
-for (let i = 0; i < fields.length; i += 2) {
-  msg[fields[i] as string] = fields[i + 1];
-}
-
-// Auto-detect message type
-let kind = msg.kind;
-
-// If no 'kind' field, check if it's from Poller
-if (!kind) {
-  if (msg.message) {
-    // Poller sends: { message: "{price_Updates: [...]}" }
-    try {
-      const parsed = JSON.parse(msg.message);
-      if (parsed.price_Updates) {
-        kind = 'price_update';
-        msg.payload = msg.message; // Reuse existing handler
+      // Parse message
+      const msg: any = {};
+      for (let i = 0; i < fields.length; i += 2) {
+        msg[fields[i] as string] = fields[i + 1];
       }
-    } catch (e) {
-      console.log("Failed to parse message:", e);
-    }
-  }
-}
 
-console.log(`\n📥 [${kind}] ${id}`);
-console.log("📦 Raw message:", JSON.stringify(msg, null, 2)); // Debug
+      // Auto-detect message type
+      let kind = msg.kind;
 
-// Route based on kind
-switch (kind) {
-  case "price_update":
-    handlePriceUpdate(msg);
-    break;
-  case "trade":
-    handleCreateOrder(msg);
-    break;
-  case "close":
-    handleCloseOrder(msg);
-    break;
-  default:
-    console.log(`⚠️ Unknown kind: ${kind}`);
-}
+      // If no 'kind' field, check if it's from Poller
+      if (!kind) {
+        if (msg.message) {
+          // Poller sends: { message: "{price_Updates: [...]}" }
+          try {
+            const parsed = JSON.parse(msg.message);
+            if (parsed.price_Updates) {
+              kind = 'price_update';
+              msg.payload = msg.message; // Reuse existing handler
+            }
+          } catch (e) {
+            console.log("Failed to parse message:", e);
+          }
+        }
+      }
+
+      console.log(`\n📥 [${kind}] ${id}`);
+      console.log("📦 Raw message:", JSON.stringify(msg, null, 2)); // Debug
+
+      // Route based on kind
+      switch (kind) {
+        case "price_update":
+          handlePriceUpdate(msg);
+          break;
+        case "trade":
+          handleCreateOrder(msg);
+          break;
+        case "close":
+          handleCloseOrder(msg);
+          break;
+        default:
+          console.log(`⚠️ Unknown kind: ${kind}`);
+      }
 
     } catch (error) {
       console.log("❌ Error:", error);
@@ -249,15 +249,15 @@ function handlePriceUpdate(msg: any) {
     const displayPrice = price / Math.pow(10, decimal);
     console.log(`   ${asset}: $${displayPrice.toFixed(2)}`);
 
-    // ✅ SEND TO BACKEND
-    redis.xadd(
-      'ack_stream',
-      '*',
-      'type', 'price_update',
-      'asset', asset,
-      'price', displayPrice.toString(),
-      'decimal', decimal.toString()
-    );
+    // ✅ SEND TO BACKEND - DISABLED (Causing OOM on Server)
+    // redis.xadd(
+    //   'ack_stream',
+    //   '*',
+    //   'type', 'price_update',
+    //   'asset', asset,
+    //   'price', displayPrice.toString(),
+    //   'decimal', decimal.toString()
+    // );
   });
 }
 
