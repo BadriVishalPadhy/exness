@@ -5,6 +5,7 @@ import {
   type IChartApi, type IPriceLine, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
 import { api } from "../../lib/api";
+import { price as fmtPrice } from "../../lib/format";
 import { useTick } from "../../lib/live";
 import { INTERVALS, type Asset, type Interval, type Position } from "../../lib/types";
 import styles from "./terminal.module.css";
@@ -30,8 +31,9 @@ export function Chart({ asset, positions }: { asset: Asset; positions: Position[
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "rgba(242,242,245,0.55)", fontFamily: mono, fontSize: 11, attributionLogo: true },
       grid: { vertLines: { color: "rgba(242,242,245,0.04)" }, horzLines: { color: "rgba(242,242,245,0.04)" } },
-      rightPriceScale: { borderColor: "rgba(242,242,245,0.1)" },
-      timeScale: { borderColor: "rgba(242,242,245,0.1)", timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: "rgba(242,242,245,0.1)", scaleMargins: { top: 0.12, bottom: 0.22 } },
+      timeScale: { borderColor: "rgba(242,242,245,0.1)", timeVisible: true, secondsVisible: false, barSpacing: 8, rightOffset: 6 },
+      localization: { priceFormatter: (p: number) => fmtPrice(p) },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: "rgba(107,107,255,0.6)", labelBackgroundColor: "#2121ff" },
@@ -58,7 +60,8 @@ export function Chart({ asset, positions }: { asset: Asset; positions: Position[
         volume.current.setData(rows.map(([t, o, , , c, v]) => ({ time: t as UTCTimestamp, value: v, color: c >= o ? "rgba(242,242,245,0.16)" : "rgba(33,33,255,0.35)" })));
         const last = rows[rows.length - 1];
         lastBar.current = last ? { time: last[0], open: last[1], high: last[2], low: last[3], close: last[4] } : null;
-        chart.current?.timeScale().fitContent();
+        // Show the newest ~120 candles at a readable width; older ones are a scroll away.
+        chart.current?.timeScale().setVisibleLogicalRange({ from: Math.max(0, rows.length - 120), to: rows.length + 6 });
         setState("ready");
       })
       .catch(() => alive && setState("error"));

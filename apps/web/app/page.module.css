@@ -2,10 +2,20 @@
 
 /* ---------- hero ---------- */
 .hero { padding: clamp(120px, 16vw, 180px) var(--gutter) clamp(40px, 6vw, 72px); }
-.title { margin: 0; font-size: clamp(52px, 9.4vw, 148px); line-height: 1.1; letter-spacing: -0.025em; }
-.heroFoot { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px 48px; flex-wrap: wrap; margin-top: clamp(28px, 4vw, 48px); }
-.lede { margin: 0; max-width: 46ch; color: var(--ink-2); font-size: clamp(15px, 1.3vw, 17px); }
-.heroActions { display: flex; gap: 12px; align-items: center; }
+.title { margin: 0; font-size: clamp(52px, 9.4vw, 148px); line-height: 1.02; letter-spacing: -0.025em; }
+.title :global(.hl) { margin-top: 0.06em; }
+.heroFoot { display: grid; grid-template-columns: minmax(0, 46ch) auto; justify-content: space-between; align-items: end; gap: 32px 48px; margin-top: clamp(28px, 4vw, 48px); }
+.heroCopy { display: grid; gap: 24px; justify-items: start; }
+.lede { margin: 0; color: var(--ink-2); font-size: clamp(15px, 1.3vw, 17px); }
+.heroActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ticker { display: grid; gap: 6px; justify-items: end; text-align: right; text-decoration: none; }
+.ticker:hover .tickerPrice { color: #fff; }
+.tickerPrice { font-family: var(--serif); font-size: clamp(44px, 5.4vw, 84px); line-height: 0.9; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; transition: color 0.15s; }
+.tickerMeta { display: flex; gap: 14px; align-items: baseline; }
+@media (max-width: 760px) {
+  .heroFoot { grid-template-columns: 1fr; }
+  .ticker { justify-items: start; text-align: left; }
+}
 
 /* ---------- ascii field ---------- */
 .field { position: relative; height: clamp(320px, 42vw, 520px); border-block: 1px solid var(--line); }

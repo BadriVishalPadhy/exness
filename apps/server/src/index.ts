@@ -24,7 +24,6 @@ const ORIGINS = (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000").split("
 
 const app = express();
 app.disable("x-powered-by");
-app.set("trust proxy", true);
 app.use(compression());
 app.use(express.json({ limit: "8kb" }));
 app.use(cors({ origin: ORIGINS, allowedHeaders: ["Content-Type", "Authorization"], maxAge: 600 }));
@@ -41,7 +40,13 @@ function limited(key: string, max: number, windowMs: number): boolean {
 }
 setInterval(() => { const now = Date.now(); for (const [k, b] of buckets) if (b.reset < now) buckets.delete(k); }, 60_000).unref();
 
-const clientIp = (req: Request) => (req.header("fly-client-ip") ?? req.ip ?? "unknown");
+/** The platform's own client-IP header, else the last X-Forwarded-For hop (the one our proxy appended). */
+function clientIp(req: Request): string {
+  const direct = req.header("true-client-ip") ?? req.header("fly-client-ip");
+  if (direct) return direct;
+  const hops = (req.header("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return hops[hops.length - 1] ?? req.socket.remoteAddress ?? "unknown";
+}
 
 // ---------------------------------------------------------------- auth
 

@@ -21,7 +21,7 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
   const ticks = useTicks();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const refresh = useCallback(() => api.me().then(setAccount).catch((e) => setError(explain(e))), []);
+  const refresh = useCallback(() => api.me().then((a) => { setAccount(a); setError(null); reconnectWithToken(); }).catch((e) => setError(explain(e))), []);
   const notify = useCallback((msg: string, tone: Toast["tone"]) => {
     clearTimeout(toastTimer.current);
     setToast({ msg, tone, key: Date.now() });
@@ -60,7 +60,20 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
   return (
     <div className={styles.shell}>
       <header className={styles.top}>
-        <Link href="/" className={styles.brand}><Mark size={20} /><span>Strata</span></Link>
+        <Link href="/" className={styles.brand} aria-label="Strata home"><Mark size={20} /><span>Strata</span></Link>
+        <nav className={styles.marketList} aria-label="Markets">
+          {ASSETS.map(({ asset: a }) => {
+            const tk = ticks[a];
+            const ch = tk ? (tk.price - tk.open24h) / tk.open24h : NaN;
+            return (
+              <button key={a} type="button" aria-pressed={a === asset} onClick={() => setAsset(a)} className={styles.marketBtn}>
+                <b>{a}</b>
+                <span className="num">{price(tk?.price)}</span>
+                <span className={`num ${ch >= 0 ? "up" : "down"}`}>{pct(ch)}</span>
+              </button>
+            );
+          })}
+        </nav>
         <div className={styles.account}>
           <span><span className="label">Equity</span><b className="num">{account ? money(equity) : "—"}</b></span>
           <span><span className="label">Available</span><b className="num">{account ? money(account.balanceCents) : "—"}</b></span>
@@ -68,23 +81,9 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
           {account && account.positions.length === 0 && account.balanceCents !== 1_000_000 && (
             <button className="btn btn-sm btn-ghost" onClick={reset}>Reset to $10k</button>
           )}
+          <LiveStatus />
         </div>
-        <LiveStatus />
       </header>
-
-      <nav className={styles.marketList} aria-label="Markets">
-        {ASSETS.map(({ asset: a, name }) => {
-          const tk = ticks[a];
-          const ch = tk ? (tk.price - tk.open24h) / tk.open24h : NaN;
-          return (
-            <button key={a} type="button" aria-pressed={a === asset} onClick={() => setAsset(a)} className={styles.marketBtn}>
-              <span><b>{a}</b><span className="muted"> {name}</span></span>
-              <span className="num">{price(tk?.price)}</span>
-              <span className={`num ${ch >= 0 ? "up" : "down"}`}>{pct(ch)}</span>
-            </button>
-          );
-        })}
-      </nav>
 
       <section className={styles.main}>
         <div className={styles.headline}>
@@ -102,7 +101,7 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
 
       <aside className={styles.side}>
         {error && <p className={`label down ${styles.err}`}>{error}</p>}
-        <OrderPanel asset={asset} availableCents={account?.balanceCents ?? 0} onDone={done} />
+        <OrderPanel asset={asset} availableCents={account ? account.balanceCents : null} onDone={done} />
         <p className={styles.disclaimer}>Play money. Each new browser gets $10,000 of demo USDC. Liquidation at 95% loss of margin.</p>
       </aside>
 

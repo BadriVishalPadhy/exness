@@ -3,7 +3,7 @@
 A demo perpetual-futures terminal with play money. Live BTC, ETH and SOL prices from Backpack, one
 engine that owns every balance, Redis Streams between services, and every fill settled in Postgres.
 
-**Live:** https://strata-futures.vercel.app (frontend) · https://strata-engine.fly.dev/health (backend)
+**Live:** https://strata-futures.vercel.app (frontend) · https://strata-engine-zoex.onrender.com/health (backend)
 
 Play money only. Not affiliated with any exchange.
 
@@ -59,5 +59,5 @@ Server env: `DATABASE_URL`, `REDIS_URL` (default `redis://127.0.0.1:6379`), `JWT
 
 ## Deploy
 
-- **Backend:** `fly deploy` (one machine in `sin`, next to the database; it stops when idle and starts on the first request). Secrets: `fly secrets set DATABASE_URL=... JWT_SECRET=... ALLOWED_ORIGINS=https://strata-futures.vercel.app`.
-- **Frontend:** Vercel project with root directory `apps/web` and `NEXT_PUBLIC_API_URL=https://strata-engine.fly.dev`.
+- **Backend:** Render free web service from this repo's `Dockerfile`, region Singapore (next to the Neon database). One container runs Redis and the three services under `scripts/supervise.mjs`. Free instances sleep after 15 idle minutes and wake on the next request (~30–60 s); state lives in Postgres, so nothing is lost. Env: `DATABASE_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS=https://strata-futures.vercel.app`.
+- **Frontend:** Vercel project with root directory `apps/web` and `NEXT_PUBLIC_API_URL=https://strata-engine-zoex.onrender.com`.

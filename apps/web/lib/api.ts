@@ -33,12 +33,13 @@ export function ensureToken(): Promise<string> {
 }
 export const currentToken = readToken;
 
-async function call<T>(path: string, init: RequestInit = {}, authed = true): Promise<T> {
+async function call<T>(path: string, init: RequestInit = {}, authed = true, retried = false): Promise<T> {
   const headers: Record<string, string> = { ...(init.body ? { "Content-Type": "application/json" } : {}) };
   if (authed) headers.Authorization = `Bearer ${await ensureToken()}`;
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   const body = await res.json().catch(() => ({}));
-  if (res.status === 401 && authed) { writeToken(null); }
+  // A token the server no longer accepts (expired, or the account is gone): start a fresh guest account once.
+  if (res.status === 401 && authed && !retried) { writeToken(null); return call<T>(path, init, authed, true); }
   if (!res.ok) throw new ApiError(body.error ?? `http_${res.status}`, res.status);
   return body as T;
 }

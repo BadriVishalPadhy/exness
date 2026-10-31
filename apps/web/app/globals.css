@@ -33,7 +33,14 @@ button, input { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--blue-hi); outline-offset: 2px; }
 
 /* The highlighter: a solid blue block behind a word. */
-.hl { background: var(--blue); color: #fff; padding: 0 0.08em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.hl { display: inline-block; background: var(--blue); color: #fff; line-height: 0.92; padding: 0.04em 0.09em 0.1em; }
+/* Range input: a hairline track and a square thumb. */
+input[type="range"] { -webkit-appearance: none; appearance: none; height: 20px; background: transparent; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(to right, var(--blue) var(--fill, 0%), var(--line-2) var(--fill, 0%)); }
+input[type="range"]::-moz-range-track { height: 2px; background: var(--line-2); }
+input[type="range"]::-moz-range-progress { height: 2px; background: var(--blue); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; background: var(--ink); border: 0; border-radius: 0; }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; background: var(--ink); border: 0; border-radius: 0; }
 
 .serif { font-family: var(--serif); font-weight: 400; }
 .mono { font-family: var(--mono); }

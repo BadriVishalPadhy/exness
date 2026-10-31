@@ -9,7 +9,7 @@ import styles from "./terminal.module.css";
 const LEVERAGE_STEPS = [1, 5, 10, 25, 50, 100];
 
 export function OrderPanel({ asset, availableCents, onDone }: {
-  asset: Asset; availableCents: number; onDone: (msg: string, tone: "up" | "down" | "blue") => void;
+  asset: Asset; availableCents: number | null; onDone: (msg: string, tone: "up" | "down" | "blue") => void;
 }) {
   const [side, setSide] = useState<"long" | "short">("long");
   const [margin, setMargin] = useState("100");
@@ -18,7 +18,9 @@ export function OrderPanel({ asset, availableCents, onDone }: {
   const tick = useTick(asset);
 
   const m = Number(margin);
-  const valid = Number.isFinite(m) && m > 0 && m * 100 <= availableCents && !!tick;
+  const known = availableCents !== null;
+  const over = known && Number.isFinite(m) && m * 100 > availableCents;
+  const valid = known && Number.isFinite(m) && m > 0 && !over && !!tick;
   const size = m * leverage;
   const liq = tick ? liquidationPrice(side, tick.price, leverage) : undefined;
 
@@ -53,14 +55,14 @@ export function OrderPanel({ asset, availableCents, onDone }: {
       </label>
       <div className={styles.quick}>
         {[0.1, 0.25, 0.5, 1].map((f) => (
-          <button key={f} type="button" onClick={() => setMargin(String(Math.floor((availableCents * f) / 100 * 100) / 100))}>{f === 1 ? "Max" : `${f * 100}%`}</button>
+          <button key={f} type="button" onClick={() => known && setMargin(String(Math.floor(((availableCents * f) / 100) * 100) / 100))}>{f === 1 ? "Max" : `${f * 100}%`}</button>
         ))}
       </div>
-      <p id="avail" className={`label ${styles.avail}`}>Available <span className="num">{money(availableCents)}</span></p>
+      <p id="avail" className={`label ${styles.avail}`}>Available <span className="num">{known ? money(availableCents) : "—"}</span></p>
 
       <div className={styles.field}>
         <span className={styles.levHead}><span className="label">Leverage</span><span className="num">{leverage}×</span></span>
-        <input type="range" min={1} max={MAX_LEVERAGE} value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} aria-label="Leverage" className={styles.range} />
+        <input type="range" min={1} max={MAX_LEVERAGE} value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} aria-label="Leverage" className={styles.range} style={{ "--fill": `${((leverage - 1) / (MAX_LEVERAGE - 1)) * 100}%` } as React.CSSProperties} />
         <div className={styles.quick}>
           {LEVERAGE_STEPS.map((l) => (
             <button key={l} type="button" aria-pressed={l === leverage} onClick={() => setLeverage(l)}>{l}×</button>
@@ -79,7 +81,7 @@ export function OrderPanel({ asset, availableCents, onDone }: {
         {busy ? "Sending…" : `${side === "long" ? "Long" : "Short"} ${asset} · ${leverage}×`}
       </button>
       {!tick && <p className="label">Waiting for a live price…</p>}
-      {Number.isFinite(m) && m * 100 > availableCents && <p className="label down">More than your available balance.</p>}
+      {over && <p className="label down">More than your available balance.</p>}
     </form>
   );
 }

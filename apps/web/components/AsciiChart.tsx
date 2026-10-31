@@ -1,8 +1,8 @@
 "use client";
 /**
- * Real BTC hourly candles drawn as a field of monospace characters: candle bodies in white (up) or
- * blue (down), wicks as dim blue, everything else a faint noise that slowly reshuffles. The cursor
- * lights up the cells around it. The newest candle follows live ticks.
+ * Real BTC hourly closes drawn as an area of monospace characters: one column per candle, the top
+ * edge in white, the fill fading to blue toward the floor, and a faint noise field above. Characters
+ * slowly reshuffle, the cursor lights the cells around it, and the newest column follows live ticks.
  */
 import { useEffect, useRef } from "react";
 import { api } from "../lib/api";
@@ -10,82 +10,74 @@ import { useTick } from "../lib/live";
 import type { Candle } from "../lib/types";
 
 const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#%&*+=";
-const CELL_W = 11;
-const CELL_H = 16;
+const CELL_W = 10;
+const CELL_H = 14;
 const FPS = 12;
 
 const randChar = () => CHARS[Math.floor(Math.random() * CHARS.length)]!;
 
 export function AsciiChart({ className }: { className?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const candles = useRef<Candle[]>([]);
+  const closes = useRef<number[]>([]);
   const tick = useTick("BTC");
 
   useEffect(() => {
     let alive = true;
-    api.klines("BTC", "1h").then((r) => { if (alive) candles.current = r.candles; }).catch(() => {});
+    api.klines("BTC", "1h").then((r) => { if (alive) closes.current = r.candles.map((c: Candle) => c[4]); }).catch(() => {});
     return () => { alive = false; };
   }, []);
 
-  // Fold live ticks into the newest candle.
   useEffect(() => {
-    const last = candles.current[candles.current.length - 1];
-    if (!tick || !last) return;
-    last[4] = tick.price;
-    last[2] = Math.max(last[2], tick.price);
-    last[3] = Math.min(last[3], tick.price);
+    if (tick && closes.current.length) closes.current[closes.current.length - 1] = tick.price;
   }, [tick]);
 
   useEffect(() => {
     const el = canvas.current;
-    if (!el) return;
-    const ctx = el.getContext("2d");
-    if (!ctx) return;
+    const ctx = el?.getContext("2d");
+    if (!el || !ctx) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let cols = 0, rows = 0, grid: string[] = [];
+    const family = getComputedStyle(document.documentElement).getPropertyValue("--font-mono") || "monospace";
+    let cols = 0, rows = 0, w = 0, h = 0, grid: string[] = [];
     let mouse = { x: -1e4, y: -1e4 };
     let visible = true, raf = 0, last = 0;
 
     const resize = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const { width, height } = el.getBoundingClientRect();
-      el.width = Math.round(width * dpr);
-      el.height = Math.round(height * dpr);
+      ({ width: w, height: h } = el.getBoundingClientRect());
+      el.width = Math.round(w * dpr);
+      el.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cols = Math.ceil(width / CELL_W);
-      rows = Math.ceil(height / CELL_H);
+      cols = Math.ceil(w / CELL_W);
+      rows = Math.ceil(h / CELL_H);
       grid = Array.from({ length: cols * rows }, randChar);
     };
 
     const draw = () => {
-      const { width, height } = el.getBoundingClientRect();
-      ctx.clearRect(0, 0, width, height);
-      ctx.font = `500 12px ${getComputedStyle(el).getPropertyValue("--font-mono") || "monospace"}`;
+      ctx.clearRect(0, 0, w, h);
+      ctx.font = `500 11px ${family}`;
       ctx.textBaseline = "top";
-      const data = candles.current.slice(-Math.max(1, Math.floor(cols / 3)));
-      // Each candle takes three columns (two-wide body, one gap), right-aligned so the newest sits at the edge.
-      const hi = Math.max(...data.map((c) => c[2]));
-      const lo = Math.min(...data.map((c) => c[3]));
-      const pad = 2;
-      const toRow = (p: number) => pad + Math.round(((hi - p) / (hi - lo || 1)) * (rows - pad * 2 - 1));
-      const offset = cols - data.length * 3;
+      for (let i = 0; i < grid.length; i++) if (Math.random() < 0.025) grid[i] = randChar();
 
-      for (let i = 0; i < grid.length; i++) if (Math.random() < 0.03) grid[i] = randChar();
+      // Fit the newest `cols` closes to the width, scaled into the middle 70% of the height.
+      const data = closes.current.slice(-cols);
+      const hi = Math.max(...data), lo = Math.min(...data);
+      const top = Math.round(rows * 0.12), span = Math.round(rows * 0.68);
+      const edgeRow = (p: number) => top + Math.round(((hi - p) / (hi - lo || 1)) * span);
+      const offset = cols - data.length;
 
       for (let c = 0; c < cols; c++) {
-        const k = c >= offset ? data[Math.floor((c - offset) / 3)] : undefined;
-        const isCandleCol = !!k && (c - offset) % 3 !== 2;
-        const top = k ? toRow(k[2]) : -1, bottom = k ? toRow(k[3]) : -1;
-        const bTop = k ? toRow(Math.max(k[1], k[4])) : -1, bBot = k ? toRow(Math.min(k[1], k[4])) : -1;
-        const up = k ? k[4] >= k[1] : true;
+        const p = data[c - offset];
+        const edge = p === undefined ? rows + 1 : edgeRow(p);
         for (let r = 0; r < rows; r++) {
           const x = c * CELL_W, y = r * CELL_H;
-          const d = Math.hypot(x - mouse.x, y - mouse.y);
-          const glow = Math.max(0, 1 - d / 160);
+          const glow = Math.max(0, 1 - Math.hypot(x - mouse.x, y - mouse.y) / 150);
           let color: string;
-          if (isCandleCol && r >= bTop && r <= bBot) color = up ? `rgba(242,242,245,${0.75 + glow * 0.25})` : `rgba(90,90,255,${0.85 + glow * 0.15})`;
-          else if (isCandleCol && r >= top && r <= bottom) color = `rgba(70,70,230,${0.45 + glow * 0.4})`;
-          else color = `rgba(70,70,210,${0.12 + glow * 0.5})`;
+          if (r === edge) color = `rgba(242,242,245,${0.9 + glow * 0.1})`;
+          else if (r > edge) {
+            const depth = (r - edge) / Math.max(1, rows - edge);
+            const tone = Math.round(80 - depth * 30);
+            color = `rgba(${tone},${tone},255,${(0.75 - depth * 0.62 + glow * 0.3).toFixed(3)})`;
+          } else color = `rgba(90,90,220,${(0.06 + glow * 0.35).toFixed(3)})`;
           ctx.fillStyle = color;
           ctx.fillText(grid[r * cols + c]!, x, y);
         }
@@ -108,13 +100,14 @@ export function AsciiChart({ className }: { className?: string }) {
     const leave = () => { mouse = { x: -1e4, y: -1e4 }; };
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerleave", leave);
-    if (reduced) {
-      const once = setInterval(() => { if (candles.current.length) { draw(); clearInterval(once); } }, 200);
-      return () => { clearInterval(once); ro.disconnect(); io.disconnect(); };
-    }
-    raf = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); el.removeEventListener("pointermove", move); el.removeEventListener("pointerleave", leave); };
+    let once: ReturnType<typeof setInterval> | undefined;
+    if (reduced) once = setInterval(() => { if (closes.current.length) { draw(); clearInterval(once); } }, 200);
+    else raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf); clearInterval(once); ro.disconnect(); io.disconnect();
+      el.removeEventListener("pointermove", move); el.removeEventListener("pointerleave", leave);
+    };
   }, []);
 
-  return <canvas ref={canvas} className={className} role="img" aria-label="Bitcoin hourly candles drawn as characters" />;
+  return <canvas ref={canvas} className={className} role="img" aria-label="Bitcoin hourly closing prices drawn as characters" />;
 }

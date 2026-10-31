@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { pct, price, compact } from "../lib/format";
-import { useTicks } from "../lib/live";
+import { useTick, useTicks } from "../lib/live";
 import { ASSETS } from "../lib/types";
 import styles from "../app/page.module.css";
 
@@ -26,5 +26,21 @@ export function LiveMarkets() {
         );
       })}
     </ul>
+  );
+}
+
+/** Big live BTC price for the hero. */
+export function HeroTicker() {
+  const t = useTick("BTC");
+  const change = t ? (t.price - t.open24h) / t.open24h : NaN;
+  return (
+    <Link href="/trade?asset=BTC" className={styles.ticker} aria-label="Bitcoin live price, open in terminal">
+      <span className="label">BTC / USDC · live</span>
+      <span className={styles.tickerPrice}>{t ? `$${price(t.price)}` : "—"}</span>
+      <span className={styles.tickerMeta}>
+        <span className={`num ${change >= 0 ? "up" : "down"}`}>{pct(change)}</span>
+        <span className="label">24h</span>
+      </span>
+    </Link>
   );
 }

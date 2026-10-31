@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AsciiChart } from "../components/AsciiChart";
-import { LiveMarkets } from "../components/LiveMarkets";
+import { HeroTicker, LiveMarkets } from "../components/LiveMarkets";
 import { Nav } from "../components/Nav";
 import styles from "./page.module.css";
 
@@ -22,14 +22,17 @@ export default function Home() {
             <span className="hl">settled</span> on a <span className="hl">stream.</span>
           </h1>
           <div className={styles.heroFoot}>
-            <p className={styles.lede}>
-              Strata is a demo perpetual futures terminal. Live prices from Backpack, one engine that owns every
-              balance, and every fill settled in Postgres. Play money, real architecture.
-            </p>
-            <div className={styles.heroActions}>
-              <Link href="/trade" className="btn">Open the terminal</Link>
-              <a href="#how" className="btn btn-ghost">How it works</a>
+            <div className={styles.heroCopy}>
+              <p className={styles.lede}>
+                Strata is a demo perpetual futures terminal. Live prices from Backpack, one engine that owns every
+                balance, and every fill settled in Postgres. Play money, real architecture.
+              </p>
+              <div className={styles.heroActions}>
+                <Link href="/trade" className="btn btn-solid">Open the terminal</Link>
+                <a href="#how" className="btn">How it works</a>
+              </div>
             </div>
+            <HeroTicker />
           </div>
         </section>
 

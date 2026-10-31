@@ -48,8 +48,9 @@ function start() {
 
 /** Reconnect with the account token once a session exists, so account events reach this tab. */
 export function reconnectWithToken() {
-  if (socket && socket.url.includes("token=")) return;
-  socket?.close();
+  const token = currentToken();
+  if (!token || socket?.url.includes(`token=${encodeURIComponent(token)}`)) return;
+  socket?.close(); // onclose reconnects with the current token
 }
 
 function subscribe(fn: () => void) { start(); tickSubs.add(fn); return () => { tickSubs.delete(fn); }; }
