@@ -1,11 +1,17 @@
 {
-  "extends":"@repo/typescript-config/base.json"
-  ,
+  "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
-     "lib": [
-            "es5", "es6", "dom", "dom.iterable"
-        ],
-    "rootDir": "./src",
-    "outDir": "./dist"
-  }
+    "noEmit": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "es2022"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src"
+  ]
 }

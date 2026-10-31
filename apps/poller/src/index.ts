@@ -1,81 +1,81 @@
+/**
+ * Poller: subscribes to Backpack's ticker stream and publishes the latest price per market to the
+ * "prices" Redis stream every 100 ms when something changed, and every market at least every 5 s.
+ */
 import WebSocket from "ws";
-import Redis from "ioredis";
-interface PRICE_DATA {
-  asset: string;
-  price: number;
-  decimal: number;
-}
+import { ASSETS, STREAM, encode, log, redisClient, type Asset, type Tick } from "@strata/shared";
 
-const redisClient = new Redis({
-  port: 6379,
-  host: "localhost",
-});
+const FLUSH_MS = 100;
+const STALE_MS = 15_000; // reconnect if the feed goes quiet this long
+const HEARTBEAT_MS = 5_000; // re-send unchanged markets so consumers can tell quiet from stale
+const redis = redisClient("poller");
+const bySymbol = new Map<string, Asset>(Object.entries(ASSETS).map(([a, c]) => [c.symbol, a as Asset]));
 
-const latestPrice: Map<string, PRICE_DATA> = new Map();
+const latest = new Map<Asset, Tick>();
+const dirty = new Set<Asset>();
+const publishedAt = new Map<Asset, number>();
+let lastMessageAt = Date.now();
+let attempt = 0;
 
-const ASSETS = {
-  BTC: { symbol: "BTC_USDC", decimal: 3 },
-  SOL: { symbol: "SOL_USDC", decimal: 3 },
-  ETH: { symbol: "ETH_USDC", decimal: 3 },
-};
-let ws: WebSocket;
+function connect() {
+  const ws = new WebSocket("wss://ws.backpack.exchange/");
+  let watchdog: NodeJS.Timeout | undefined;
 
-function connectToBackPack() {
-  ws = new WebSocket("wss://ws.backpack.exchange/");
-  //open connection
   ws.on("open", () => {
-    const streams = Object.values(ASSETS).map(
-      (asset) => `ticker.${asset.symbol}`
-    ); //what u need
-      ws.send(JSON.stringify({ method: "SUBSCRIBE", params: streams }));
+    attempt = 0;
+    lastMessageAt = Date.now();
+    ws.send(JSON.stringify({ method: "SUBSCRIBE", params: Object.values(ASSETS).map((a) => `ticker.${a.symbol}`) }));
+    log("poller", "connected to Backpack");
+    watchdog = setInterval(() => {
+      if (Date.now() - lastMessageAt > STALE_MS) { log("poller", "feed stale, reconnecting"); ws.terminate(); }
+    }, 5_000);
   });
-  //this for getting whatever message the existing websocket is sending
-  ws.on("message", (data: WebSocket.Data) => {
-    const parsedData = JSON.parse(data.toString()); //string to json
 
-    if (parsedData.stream && parsedData.stream.startsWith("ticker.")) {
-      const price = parseFloat(parsedData.data.c);
-      const symbol = parsedData.data.s;
-
-      const assetEntry = Object.entries(ASSETS).find(
-        ([_, config]) => config.symbol === symbol
-      ); //checks the symbol from websocket is it there in ASSETS and give matching config
-      console.log("assetEntry", assetEntry);
-      if (!assetEntry) {
-        return;
-      }
-      const [assetName, config] = assetEntry; //destructure
-      const priceAsInt = Math.round(price * Math.pow(10, config.decimal));
-
-      latestPrice.set(assetName, {
-        asset: assetName,
-        price: priceAsInt,
-        decimal: config.decimal,
-      });
-      console.log("Price", price);
-    }
+  ws.on("message", (raw) => {
+    lastMessageAt = Date.now();
+    let msg: { stream?: string; data?: Record<string, string | number> };
+    try { msg = JSON.parse(raw.toString()); } catch { return; }
+    const d = msg.data;
+    if (!d || !msg.stream?.startsWith("ticker.")) return;
+    const asset = bySymbol.get(String(d.s));
+    if (!asset) return;
+    const price = Number(d.c);
+    if (!Number.isFinite(price) || price <= 0) return;
+    const prev = latest.get(asset);
+    if (prev && prev.price === price) return;
+    latest.set(asset, {
+      asset, price, open24h: Number(d.o), high24h: Number(d.h), low24h: Number(d.l), volume24h: Number(d.V),
+      ts: Math.floor(Number(d.E) / 1000) || Date.now(),
+    });
+    dirty.add(asset);
   });
-  ws.on("error", (error) => {
-    console.log(error, "Websocket error");
+
+  ws.on("close", () => {
+    clearInterval(watchdog);
+    const delay = Math.min(30_000, 500 * 2 ** attempt++);
+    log("poller", `disconnected, retrying in ${delay} ms`);
+    setTimeout(connect, delay);
   });
+  ws.on("error", (e) => log("poller", "websocket error", e.message));
 }
 
-function startQueuePublisher() {
-  setInterval(async () => {
-    if (latestPrice.size === 0) {
-      return;
-    }
-
-    const message = {
-      price_Updates: [...latestPrice.values()], //convert map into array
-    };
-
-    await redisClient.xadd("queue", "*", "message", JSON.stringify(message));
-    console.log("📤 Pushed to Queue:", JSON.stringify(message, null, 2));
-    const queueLength = await redisClient.xlen("queue");
-    console.log("queueLength", queueLength);
-  }, 100);
+async function flush() {
+  const now = Date.now();
+  for (const [asset] of latest) if (now - (publishedAt.get(asset) ?? 0) > HEARTBEAT_MS) dirty.add(asset);
+  if (dirty.size === 0) return;
+  const ticks = [...dirty].map((a) => latest.get(a)!);
+  dirty.clear();
+  for (const t of ticks) publishedAt.set(t.asset, now);
+  try {
+    // Approximate trimming keeps the stream bounded without slowing every XADD.
+    await redis.xadd(STREAM.prices, "MAXLEN", "~", 1000, "*", ...encode(ticks));
+  } catch (e) {
+    log("poller", "publish failed", (e as Error).message);
+    for (const t of ticks) dirty.add(t.asset);
+  }
 }
 
-connectToBackPack();
-startQueuePublisher();
+setInterval(flush, FLUSH_MS);
+connect();
+
+for (const sig of ["SIGINT", "SIGTERM"] as const) process.on(sig, () => { redis.disconnect(); process.exit(0); });

@@ -1,135 +1,63 @@
-# Turborepo starter
+# Strata
 
-This Turborepo starter is maintained by the Turborepo core team.
+A demo perpetual-futures terminal with play money. Live BTC, ETH and SOL prices from Backpack, one
+engine that owns every balance, Redis Streams between services, and every fill settled in Postgres.
 
-## Using this example
+**Live:** https://strata-futures.vercel.app (frontend) · https://strata-engine.fly.dev/health (backend)
 
-Run the following command:
+Play money only. Not affiliated with any exchange.
 
-```sh
-npx create-turbo@latest
-```
-
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
+## Architecture
 
 ```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+Backpack WS ──▶ poller ──XADD prices──▶ ┌────────────── Redis ──────────────┐
+                                        │ prices    (trimmed to ~1000)      │
+browser ──HTTP──▶ server ──XADD──────▶  │ commands  (consumer group engine) │ ──▶ engine ──one statement per batch──▶ Postgres
+   ▲  ◀──WS ticks / account events──    │ results   (trimmed to ~10000)     │ ◀──
+   └────────────────────────────────────└───────────────────────────────────┘
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+| Service | Job |
+|---|---|
+| `apps/poller` | One WebSocket to Backpack with backoff reconnect and a stale-feed watchdog. Publishes changed markets every 100 ms, and every market at least every 5 s. |
+| `apps/engine` | The single owner of balances and positions, held in memory and rebuilt from Postgres on start. Reads commands through a consumer group, applies a batch, commits it to Postgres in **one statement**, then publishes results and `XACK`s in one Redis pipeline. Checks liquidations on every tick. Holds a Redis leader lock so two engines can never split state. |
+| `apps/server` | Express API: guest sessions (JWT), account reads from Postgres, orders sent to the engine (the waiter is registered before the command is published), candles from Backpack cached 10 s with request de-duplication, and a WebSocket that fans out ticks and nudges a user's tabs when their account changes. |
+| `apps/web` | Next.js 16 terminal: landing page with an ASCII chart of live BTC candles, and a trading view with a lightweight-charts candlestick chart, order panel, live PnL and history. |
+| `packages/shared` | Config, stream names, message types, money math, Postgres pool and schema. |
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+### Correctness rules
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+- Money is integer cents. Opening debits the margin; closing credits margin + PnL; a loss never exceeds the margin.
+- Liquidation when the loss reaches 95% of margin: `entry × (1 ∓ 0.95 / leverage)`.
+- A command is acknowledged only after its effect is committed. A crash replays unacknowledged commands; opens are idempotent by id, and a repeated close returns the original result.
+- If a commit fails, the engine exits and rebuilds from Postgres rather than run with memory ahead of the database.
 
-### Develop
+## Performance
 
-To develop all apps and packages, run the following command:
+Engine benchmark (`packages/shared/bench.mjs`): N opens then N closes pushed straight onto the
+`commands` stream, timed until every result is back. Same machine and database (Mac in India →
+Neon in Singapore, ~80 ms round trip):
 
-```
-cd my-turborepo
+| Mode | Opens | Closes |
+|---|---|---|
+| One commit per command (`ENGINE_BATCH=1`) | 9 / s | 9 / s |
+| Group commit (default, batch ≤ 200), 2,000 orders | 1,285 / s | 1,380 / s |
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
+All results accepted and every position verified in Postgres after each run.
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+## Run locally
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+```bash
+pnpm install
+export DATABASE_URL=postgres://...      # any Postgres; the schema is created on start
+pnpm build:backend
+node scripts/supervise.mjs              # starts redis-server, poller, engine and server; needs redis-server on PATH
+cd apps/web && NEXT_PUBLIC_API_URL=http://localhost:8000 pnpm dev
 ```
 
-### Remote Caching
+Server env: `DATABASE_URL`, `REDIS_URL` (default `redis://127.0.0.1:6379`), `JWT_SECRET`, `ALLOWED_ORIGINS` (comma-separated).
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+## Deploy
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+- **Backend:** `fly deploy` (one machine in `sin`, next to the database; it stops when idle and starts on the first request). Secrets: `fly secrets set DATABASE_URL=... JWT_SECRET=... ALLOWED_ORIGINS=https://strata-futures.vercel.app`.
+- **Frontend:** Vercel project with root directory `apps/web` and `NEXT_PUBLIC_API_URL=https://strata-engine.fly.dev`.
