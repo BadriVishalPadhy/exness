@@ -5,7 +5,7 @@ import { Nav } from "../components/Nav";
 import styles from "./page.module.css";
 
 const STEPS = [
-  { n: "01", title: "Poller", text: "Holds one WebSocket to Backpack, reconnects on its own, and publishes BTC, ETH and SOL to a Redis stream at most ten times a second." },
+  { n: "01", title: "Poller", text: "Holds one WebSocket to Binance, reconnects on its own, and publishes BTC, ETH and SOL to a Redis stream at most ten times a second." },
   { n: "02", title: "Redis Streams", text: "Prices, commands and results each get their own trimmed stream. Orders go through a consumer group, so nothing is lost if a process dies." },
   { n: "03", title: "Engine", text: "The only process that owns balances. It fills a whole batch of orders in memory, checks liquidations on every tick, and holds a lock so it never runs twice." },
   { n: "04", title: "Postgres", text: "Each batch is committed in one statement before the engine acknowledges it. On restart the engine rebuilds itself from here." },
@@ -24,7 +24,7 @@ export default function Home() {
           <div className={styles.heroFoot}>
             <div className={styles.heroCopy}>
               <p className={styles.lede}>
-                Strata is a demo perpetual futures terminal. Live prices from Backpack, one engine that owns every
+                Strata is a demo perpetual futures terminal. Live prices from Binance, one engine that owns every
                 balance, and every fill settled in Postgres. Play money, real architecture.
               </p>
               <div className={styles.heroActions}>
@@ -38,7 +38,7 @@ export default function Home() {
 
         <section className={styles.field} aria-label="Bitcoin, last 300 hours">
           <AsciiChart className={styles.ascii} />
-          <span className={`label ${styles.fieldCaption}`}>BTC/USDC · 1H · live</span>
+          <span className={`label ${styles.fieldCaption}`}>BTC/USDT · 1H · live</span>
         </section>
 
         <section className={styles.section} aria-labelledby="markets-title">
@@ -49,7 +49,7 @@ export default function Home() {
         <section id="how" className={styles.section} aria-labelledby="how-title">
           <h2 id="how-title" className={`label ${styles.kicker}`}>How it works</h2>
           <p className={`serif ${styles.statement}`}>
-            Prices stream in from Backpack. An engine that owns every balance reads them from <span className="hl">Redis</span>,
+            Prices stream in from Binance. An engine that owns every balance reads them from <span className="hl">Redis</span>,
             fills your order, and commits the whole batch to <span className="hl">Postgres</span> in one round trip
             <span className={styles.dim}> before it ever says yes. If it crashes, it replays what it had not finished.</span>
           </p>
@@ -71,7 +71,7 @@ export default function Home() {
 
         <footer className={styles.foot}>
           <span>Strata is a demo with play money. Nothing here is a real trade or financial advice. Not affiliated with any exchange.</span>
-          <span>Prices: Backpack public market data</span>
+          <span>Prices: Binance public market data</span>
         </footer>
       </main>
     </>

@@ -15,7 +15,7 @@ export function LiveMarkets() {
         return (
           <li key={asset}>
             <Link href={`/trade?asset=${asset}`} className={styles.market}>
-              <span className={styles.marketName}><span className="serif">{name}</span><span className="label">{asset}/USDC</span></span>
+              <span className={styles.marketName}><span className="serif">{name}</span><span className="label">{asset}/USDT</span></span>
               <span className={`num ${styles.marketPrice}`}>{t ? `$${price(t.price)}` : "—"}</span>
               <span className={`num ${change >= 0 ? "up" : "down"}`}>{pct(change)}</span>
               <span className={`num muted ${styles.marketRange}`}>{t ? `${price(t.low24h)} – ${price(t.high24h)}` : ""}</span>
@@ -35,7 +35,7 @@ export function HeroTicker() {
   const change = t ? (t.price - t.open24h) / t.open24h : NaN;
   return (
     <Link href="/trade?asset=BTC" className={styles.ticker} aria-label="Bitcoin live price, open in terminal">
-      <span className="label">BTC / USDC · live</span>
+      <span className="label">BTC / USDT · live</span>
       <span className={styles.tickerPrice}>{t ? `$${price(t.price)}` : "—"}</span>
       <span className={styles.tickerMeta}>
         <span className={`num ${change >= 0 ? "up" : "down"}`}>{pct(change)}</span>

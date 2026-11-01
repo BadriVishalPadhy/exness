@@ -25,9 +25,9 @@ export function log(service: string, ...args: unknown[]) {
 // ---------------------------------------------------------------- markets
 
 export const ASSETS = {
-  BTC: { symbol: "BTC_USDC", name: "Bitcoin" },
-  ETH: { symbol: "ETH_USDC", name: "Ethereum" },
-  SOL: { symbol: "SOL_USDC", name: "Solana" },
+  BTC: { symbol: "BTCUSDT", name: "Bitcoin" },
+  ETH: { symbol: "ETHUSDT", name: "Ethereum" },
+  SOL: { symbol: "SOLUSDT", name: "Solana" },
 } as const;
 export type Asset = keyof typeof ASSETS;
 export const isAsset = (a: unknown): a is Asset => typeof a === "string" && a in ASSETS;
@@ -35,7 +35,7 @@ export const isAsset = (a: unknown): a is Asset => typeof a === "string" && a in
 export const MAX_LEVERAGE = 100;
 /** A position is liquidated once its loss reaches this share of the margin. */
 export const LIQUIDATION_LOSS = 0.95;
-export const STARTING_BALANCE_CENTS = 1_000_000; // $10,000 of demo USDC
+export const STARTING_BALANCE_CENTS = 1_000_000; // $10,000 of demo USDT
 
 // ---------------------------------------------------------------- streams
 //

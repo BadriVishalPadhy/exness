@@ -50,7 +50,7 @@ export function OrderPanel({ asset, availableCents, onDone }: {
         <span className={styles.inputWrap}>
           <span className="muted">$</span>
           <input inputMode="decimal" value={margin} onChange={(e) => setMargin(e.target.value.replace(/[^0-9.]/g, ""))} aria-describedby="avail" />
-          <span className="label">USDC</span>
+          <span className="label">USDT</span>
         </span>
       </label>
       <div className={styles.quick}>

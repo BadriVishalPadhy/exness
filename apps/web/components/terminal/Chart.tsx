@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineStyle, createChart,
-  type IChartApi, type IPriceLine, type ISeriesApi, type UTCTimestamp,
+  TickMarkType, type IChartApi, type IPriceLine, type ISeriesApi, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 import { api } from "../../lib/api";
 import { price as fmtPrice } from "../../lib/format";
@@ -11,6 +11,15 @@ import { INTERVALS, type Asset, type Interval, type Position } from "../../lib/t
 import styles from "./terminal.module.css";
 
 const SECONDS: Record<Interval, number> = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14_400, "1d": 86_400 };
+
+// The chart works in UTC; label it in the viewer's own time zone.
+const local = (t: Time, opts: Intl.DateTimeFormatOptions) => new Date((t as number) * 1000).toLocaleString([], { hour12: false, ...opts });
+const crosshairTime = (t: Time) => local(t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const tickMark = (t: Time, type: TickMarkType) =>
+  type === TickMarkType.Year ? local(t, { year: "numeric" })
+  : type === TickMarkType.Month ? local(t, { month: "short" })
+  : type === TickMarkType.DayOfMonth ? local(t, { day: "numeric", month: "short" })
+  : local(t, { hour: "2-digit", minute: "2-digit" });
 
 export function Chart({ asset, positions }: { asset: Asset; positions: Position[] }) {
   const box = useRef<HTMLDivElement>(null);
@@ -32,8 +41,8 @@ export function Chart({ asset, positions }: { asset: Asset; positions: Position[
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "rgba(242,242,245,0.55)", fontFamily: mono, fontSize: 11, attributionLogo: true },
       grid: { vertLines: { color: "rgba(242,242,245,0.04)" }, horzLines: { color: "rgba(242,242,245,0.04)" } },
       rightPriceScale: { borderColor: "rgba(242,242,245,0.1)", scaleMargins: { top: 0.12, bottom: 0.22 } },
-      timeScale: { borderColor: "rgba(242,242,245,0.1)", timeVisible: true, secondsVisible: false, barSpacing: 8, rightOffset: 6 },
-      localization: { priceFormatter: (p: number) => fmtPrice(p) },
+      timeScale: { borderColor: "rgba(242,242,245,0.1)", timeVisible: true, secondsVisible: false, barSpacing: 8, rightOffset: 6, tickMarkFormatter: tickMark },
+      localization: { priceFormatter: (p: number) => fmtPrice(p), timeFormatter: crosshairTime },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: "rgba(107,107,255,0.6)", labelBackgroundColor: "#2121ff" },

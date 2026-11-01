@@ -63,7 +63,7 @@ function auth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-/** A guest account funded with demo USDC. No email, no password. */
+/** A guest account funded with demo USDT. No email, no password. */
 app.post("/api/v1/session", async (req, res) => {
   if (limited(`session:${clientIp(req)}`, 10, 60 * 60_000)) return res.status(429).json({ error: "too_many_accounts" });
   const userId = randomUUID();

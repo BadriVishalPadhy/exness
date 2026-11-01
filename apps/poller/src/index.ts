@@ -1,6 +1,7 @@
 /**
- * Poller: subscribes to Backpack's ticker stream and publishes the latest price per market to the
- * "prices" Redis stream every 100 ms when something changed, and every market at least every 5 s.
+ * Poller: streams Binance's public market data (every trade, plus a 24h summary each second) and
+ * publishes the latest price per market to the "prices" Redis stream every 100 ms when something
+ * changed, and every market at least every 5 s.
  */
 import WebSocket from "ws";
 import { ASSETS, STREAM, encode, log, redisClient, type Asset, type Tick } from "@strata/shared";
@@ -10,6 +11,8 @@ const STALE_MS = 15_000; // reconnect if the feed goes quiet this long
 const HEARTBEAT_MS = 5_000; // re-send unchanged markets so consumers can tell quiet from stale
 const redis = redisClient("poller");
 const bySymbol = new Map<string, Asset>(Object.entries(ASSETS).map(([a, c]) => [c.symbol, a as Asset]));
+const STREAMS = Object.values(ASSETS).flatMap(({ symbol }) => [`${symbol.toLowerCase()}@aggTrade`, `${symbol.toLowerCase()}@miniTicker`]);
+const FEED = `wss://data-stream.binance.vision/stream?streams=${STREAMS.join("/")}`;
 
 const latest = new Map<Asset, Tick>();
 const dirty = new Set<Asset>();
@@ -17,15 +20,29 @@ const publishedAt = new Map<Asset, number>();
 let lastMessageAt = Date.now();
 let attempt = 0;
 
+/** Trades move the price; the 24h summary fills in open, high, low and volume. */
+function apply(asset: Asset, d: Record<string, string | number>, kind: "trade" | "summary") {
+  const price = Number(kind === "trade" ? d.p : d.c);
+  if (!Number.isFinite(price) || price <= 0) return;
+  const prev = latest.get(asset);
+  const next: Tick = kind === "summary"
+    ? { asset, price, open24h: Number(d.o), high24h: Number(d.h), low24h: Number(d.l), volume24h: Number(d.q), ts: Number(d.E) || Date.now() }
+    : prev
+      ? { ...prev, price, high24h: Math.max(prev.high24h, price), low24h: Math.min(prev.low24h, price), ts: Number(d.T) || Date.now() }
+      : { asset, price, open24h: price, high24h: price, low24h: price, volume24h: 0, ts: Number(d.T) || Date.now() };
+  if (prev && prev.price === next.price && prev.open24h === next.open24h && prev.volume24h === next.volume24h) return;
+  latest.set(asset, next);
+  dirty.add(asset);
+}
+
 function connect() {
-  const ws = new WebSocket("wss://ws.backpack.exchange/");
+  const ws = new WebSocket(FEED);
   let watchdog: NodeJS.Timeout | undefined;
 
   ws.on("open", () => {
     attempt = 0;
     lastMessageAt = Date.now();
-    ws.send(JSON.stringify({ method: "SUBSCRIBE", params: Object.values(ASSETS).map((a) => `ticker.${a.symbol}`) }));
-    log("poller", "connected to Backpack");
+    log("poller", "connected to Binance");
     watchdog = setInterval(() => {
       if (Date.now() - lastMessageAt > STALE_MS) { log("poller", "feed stale, reconnecting"); ws.terminate(); }
     }, 5_000);
@@ -36,18 +53,11 @@ function connect() {
     let msg: { stream?: string; data?: Record<string, string | number> };
     try { msg = JSON.parse(raw.toString()); } catch { return; }
     const d = msg.data;
-    if (!d || !msg.stream?.startsWith("ticker.")) return;
+    if (!d) return;
     const asset = bySymbol.get(String(d.s));
     if (!asset) return;
-    const price = Number(d.c);
-    if (!Number.isFinite(price) || price <= 0) return;
-    const prev = latest.get(asset);
-    if (prev && prev.price === price) return;
-    latest.set(asset, {
-      asset, price, open24h: Number(d.o), high24h: Number(d.h), low24h: Number(d.l), volume24h: Number(d.V),
-      ts: Math.floor(Number(d.E) / 1000) || Date.now(),
-    });
-    dirty.add(asset);
+    if (d.e === "aggTrade") apply(asset, d, "trade");
+    else if (d.e === "24hrMiniTicker") apply(asset, d, "summary");
   });
 
   ws.on("close", () => {

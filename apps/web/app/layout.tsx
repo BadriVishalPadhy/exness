@@ -8,7 +8,7 @@ const mono = Sometype_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: { default: "Strata — crypto futures, settled on a stream", template: "%s · Strata" },
-  description: "A demo perpetual futures terminal with play money: live Backpack prices, Redis Streams, one engine, Postgres settlement.",
+  description: "A demo perpetual futures terminal with play money: live Binance prices, Redis Streams, one engine, Postgres settlement.",
 };
 
 export const viewport: Viewport = { themeColor: "#04040e", colorScheme: "dark" };

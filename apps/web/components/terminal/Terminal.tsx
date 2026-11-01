@@ -87,7 +87,7 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
 
       <section className={styles.main}>
         <div className={styles.headline}>
-          <h1 className="serif">{ASSETS.find((x) => x.asset === asset)?.name}<span className="label"> {asset}/USDC · perpetual</span></h1>
+          <h1 className="serif">{ASSETS.find((x) => x.asset === asset)?.name}<span className="label"> {asset}/USDT · perpetual</span></h1>
           <div className={styles.stats}>
             <span className={`num ${styles.bigPrice}`}>{t ? `$${price(t.price)}` : "—"}</span>
             <span><span className="label">24h</span><b className={`num ${change >= 0 ? "up" : "down"}`}>{pct(change)}</b></span>
@@ -102,7 +102,7 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
       <aside className={styles.side}>
         {error && <p className={`label down ${styles.err}`}>{error}</p>}
         <OrderPanel asset={asset} availableCents={account ? account.balanceCents : null} onDone={done} />
-        <p className={styles.disclaimer}>Play money. Each new browser gets $10,000 of demo USDC. Liquidation at 95% loss of margin.</p>
+        <p className={styles.disclaimer}>Play money. Each new browser gets $10,000 of demo USDT. Liquidation at 95% loss of margin.</p>
       </aside>
 
       <div className={styles.bottom}>

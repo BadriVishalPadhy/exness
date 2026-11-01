@@ -43,7 +43,7 @@ export function Positions({ positions, history, onDone }: {
                   const pnl = mark ? unrealizedCents(p, mark) : 0;
                   return (
                     <tr key={p.id}>
-                      <td>{p.asset}/USDC</td>
+                      <td>{p.asset}/USDT</td>
                       <td className={p.side === "long" ? "up" : "down"}>{p.side} {p.leverage}×</td>
                       <td className="num">{money(p.marginCents * p.leverage)}</td>
                       <td className="num">{price(p.entryPrice)}</td>
@@ -63,7 +63,7 @@ export function Positions({ positions, history, onDone }: {
             <tbody>
               {history.map((p) => (
                 <tr key={p.id}>
-                  <td>{p.asset}/USDC</td>
+                  <td>{p.asset}/USDT</td>
                   <td className={p.side === "long" ? "up" : "down"}>{p.side} {p.leverage}×</td>
                   <td className="num">{money(p.marginCents * p.leverage)}</td>
                   <td className="num">{price(p.entryPrice)}</td>

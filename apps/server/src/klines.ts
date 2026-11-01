@@ -1,5 +1,5 @@
 /**
- * Candles from Backpack's public API (the same venue the poller streams from), cached briefly and
+ * Candles from Binance's public market data API (the same venue the poller streams from), cached briefly and
  * deduplicated so a burst of chart loads costs one upstream request.
  */
 import { ASSETS, type Asset } from "@strata/shared";
@@ -24,13 +24,10 @@ export function klines(asset: Asset, interval: Interval): Promise<Candle[]> {
 }
 
 async function fetchCandles(asset: Asset, interval: Interval): Promise<Candle[]> {
-  const start = Math.floor(Date.now() / 1000) - INTERVALS[interval] * CANDLES;
-  const url = `https://api.backpack.exchange/api/v1/klines?symbol=${ASSETS[asset].symbol}&interval=${interval}&startTime=${start}`;
+  const url = `https://data-api.binance.vision/api/v3/klines?symbol=${ASSETS[asset].symbol}&interval=${interval}&limit=${CANDLES}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`backpack ${res.status}`);
-  const rows = (await res.json()) as { start: string; open: string; high: string; low: string; close: string; volume: string }[];
-  return rows.map((k) => [
-    Math.floor(Date.parse(k.start.replace(" ", "T") + "Z") / 1000),
-    Number(k.open), Number(k.high), Number(k.low), Number(k.close), Number(k.volume),
-  ]);
+  if (!res.ok) throw new Error(`binance ${res.status}`);
+  // [openTime ms, open, high, low, close, base volume, closeTime, quote volume, ...]
+  const rows = (await res.json()) as [number, string, string, string, string, string, number, string][];
+  return rows.map((k) => [k[0] / 1000, Number(k[1]), Number(k[2]), Number(k[3]), Number(k[4]), Number(k[7])]);
 }
