@@ -1,22 +1,26 @@
 /**
  * The server's side of the Redis streams: sends commands to the engine and waits for their results,
- * and keeps the latest tick per market for REST and WebSocket clients.
+ * keeps the latest tick per market for REST and WebSocket clients, and relays order books.
  */
-import { STREAM, decode, encode, log, redisClient, type Asset, type Command, type Result, type Tick } from "@strata/shared";
+import { BOOK_CHANNEL, STREAM, decode, encode, isAsset, log, redisClient, type Asset, type Book, type Command, type Result, type Tick } from "@strata/shared";
 
 const writer = redisClient("server");
 const resultReader = redisClient("server-results");
 const priceReader = redisClient("server-prices");
+const bookReader = redisClient("server-books");
 
 export const latestTicks = new Map<Asset, Tick>();
+export const latestBooks = new Map<Asset, Book>();
 
 type Waiter = { resolve: (r: Result) => void; timer: NodeJS.Timeout };
 const waiters = new Map<string, Waiter>();
 const resultListeners = new Set<(r: Result) => void>();
 const tickListeners = new Set<(t: Tick[]) => void>();
+const bookListeners = new Set<(b: Book) => void>();
 
 export const onResult = (fn: (r: Result) => void) => resultListeners.add(fn);
 export const onTicks = (fn: (t: Tick[]) => void) => tickListeners.add(fn);
+export const onBook = (fn: (b: Book) => void) => bookListeners.add(fn);
 
 /** Registers the waiter before publishing, so even an instant result cannot be missed. */
 export function send(c: Command, timeoutMs = 5000): Promise<Result | null> {
@@ -71,9 +75,21 @@ async function priceLoop() {
   }
 }
 
+function relayBooks() {
+  bookReader.on("message", (_channel: string, raw: string) => {
+    let b: Book;
+    try { b = JSON.parse(raw); } catch { return; }
+    if (!isAsset(b?.asset)) return;
+    latestBooks.set(b.asset, b);
+    for (const fn of bookListeners) fn(b);
+  });
+  void bookReader.subscribe(BOOK_CHANNEL).catch((e) => log("server", "book subscribe failed", (e as Error).message));
+}
+
 export function startBus() {
   void resultLoop();
   void priceLoop();
+  relayBooks();
 }
 
 export const redisPing = () => writer.ping();

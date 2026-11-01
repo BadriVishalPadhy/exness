@@ -7,6 +7,7 @@ import { onAccountEvent, reconnectWithToken, useTicks } from "../../lib/live";
 import { ASSETS, unrealizedCents, type Account, type Asset } from "../../lib/types";
 import { LiveStatus, Mark } from "../Nav";
 import { Chart } from "./Chart";
+import { OrderBook } from "./OrderBook";
 import { OrderPanel } from "./OrderPanel";
 import { Positions } from "./Positions";
 import styles from "./terminal.module.css";
@@ -98,6 +99,10 @@ export function Terminal({ initialAsset }: { initialAsset: Asset }) {
         </div>
         <Chart asset={asset} positions={account?.positions ?? []} />
       </section>
+
+      <div className={styles.bookArea}>
+        <OrderBook asset={asset} />
+      </div>
 
       <aside className={styles.side}>
         {error && <p className={`label down ${styles.err}`}>{error}</p>}

@@ -19,10 +19,10 @@ browser ──HTTP──▶ server ──XADD──────▶  │ commands
 
 | Service | Job |
 |---|---|
-| `apps/poller` | One WebSocket to Binance (every trade plus a per-second 24h summary) with backoff reconnect and a stale-feed watchdog. Publishes changed markets every 100 ms, and every market at least every 5 s. |
+| `apps/poller` | One WebSocket to Binance (every trade, a per-second 24h summary and the top 20 book levels) with backoff reconnect and a stale-feed watchdog. Publishes changed markets every 100 ms, and every market at least every 5 s. |
 | `apps/engine` | The single owner of balances and positions, held in memory and rebuilt from Postgres on start. Reads commands through a consumer group, applies a batch, commits it to Postgres in **one statement**, then publishes results and `XACK`s in one Redis pipeline. Checks liquidations on every tick. Holds a Redis leader lock so two engines can never split state. |
-| `apps/server` | Express API: guest sessions (JWT), account reads from Postgres, orders sent to the engine (the waiter is registered before the command is published), candles from Binance cached 10 s with request de-duplication, and a WebSocket that fans out ticks and nudges a user's tabs when their account changes. |
-| `apps/web` | Next.js 16 terminal: landing page with an ASCII chart of live BTC candles, and a trading view with a lightweight-charts candlestick chart, order panel, live PnL and history. |
+| `apps/server` | Express API: guest sessions (JWT), account reads from Postgres, orders sent to the engine (the waiter is registered before the command is published), candles from Binance cached 10 s with request de-duplication, and a WebSocket that fans out ticks, streams each tab the order book of the market it shows (Redis pub/sub from the poller, at most 4 updates a second), and nudges a user's tabs when their account changes. |
+| `apps/web` | Next.js 16 terminal: landing page with an ASCII chart of live BTC candles, and a trading view with a lightweight-charts candlestick chart, live order book, order panel, live PnL and history. |
 | `packages/shared` | Config, stream names, message types, money math, Postgres pool and schema. |
 
 ### Correctness rules

@@ -44,9 +44,13 @@ export const STARTING_BALANCE_CENTS = 1_000_000; // $10,000 of demo USDT
 // results  engine -> server           one entry per processed command or liquidation, trimmed
 
 export const STREAM = { prices: "prices", commands: "commands", results: "results" } as const;
+/** Order books are display-only and replaced every few hundred ms, so they use pub/sub, not a stream. */
+export const BOOK_CHANNEL = "books";
 export const ENGINE_GROUP = "engine";
 
 export interface Tick { asset: Asset; price: number; open24h: number; high24h: number; low24h: number; volume24h: number; ts: number }
+/** Top of the book: [price, size] levels, best first on both sides. */
+export interface Book { asset: Asset; bids: [number, number][]; asks: [number, number][]; ts: number }
 
 export type Command =
   | { kind: "open"; id: string; userId: string; asset: Asset; side: "long" | "short"; marginCents: number; leverage: number }

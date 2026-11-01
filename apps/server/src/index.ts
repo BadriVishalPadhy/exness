@@ -1,6 +1,7 @@
 /**
  * API server: guest sessions, account reads from Postgres, orders through the engine, cached candles,
- * and a WebSocket that streams ticks plus a nudge whenever a user's account changes.
+ * and a WebSocket that streams ticks, the order book a client asks for, and a nudge whenever a
+ * user's account changes.
  */
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -14,7 +15,7 @@ import {
   ASSETS, MAX_LEVERAGE, STARTING_BALANCE_CENTS, db, isAsset, log, migrate, rowToDTO,
   type Asset, type PositionRow, type Result, type Tick,
 } from "@strata/shared";
-import { latestTicks, onResult, onTicks, redisPing, send, startBus } from "./bus";
+import { latestBooks, latestTicks, onBook, onResult, onTicks, redisPing, send, startBus } from "./bus";
 import { klines, INTERVALS } from "./klines";
 
 const PORT = Number(process.env.PORT ?? 8000);
@@ -170,6 +171,7 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 4096 });
 const socketsByUser = new Map<string, Set<WebSocket>>();
 const alive = new WeakSet<WebSocket>();
+const bookFor = new WeakMap<WebSocket, Asset>(); // each tab follows the book of the market it shows
 
 function sendJson(ws: WebSocket, msg: unknown) {
   // A slow client skips ticks rather than buffering without limit.
@@ -183,6 +185,14 @@ wss.on("connection", (ws, req) => {
   if (userId) (socketsByUser.get(userId) ?? socketsByUser.set(userId, new Set()).get(userId)!).add(ws);
   alive.add(ws);
   ws.on("pong", () => alive.add(ws));
+  ws.on("message", (raw) => {
+    let msg: { type?: string; asset?: unknown };
+    try { msg = JSON.parse(raw.toString()); } catch { return; }
+    if (msg.type !== "book" || !isAsset(msg.asset)) return;
+    bookFor.set(ws, msg.asset);
+    const book = latestBooks.get(msg.asset);
+    if (book) sendJson(ws, { type: "book", book });
+  });
   ws.on("close", () => { if (userId) socketsByUser.get(userId)?.delete(ws); });
   sendJson(ws, { type: "ticks", ticks: [...latestTicks.values()] });
 });
@@ -200,6 +210,14 @@ onTicks((batch: Tick[]) => {
   const latest = new Map(batch.map((t) => [t.asset, t]));
   const payload = JSON.stringify({ type: "ticks", ticks: [...latest.values()] });
   for (const ws of wss.clients) if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 256 * 1024) ws.send(payload);
+});
+
+onBook((book) => {
+  let payload: string | undefined;
+  for (const ws of wss.clients) {
+    if (bookFor.get(ws) !== book.asset || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount >= 256 * 1024) continue;
+    ws.send((payload ??= JSON.stringify({ type: "book", book })));
+  }
 });
 
 onResult((r) => {

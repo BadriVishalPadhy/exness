@@ -9,6 +9,8 @@ export const MAX_LEVERAGE = 100;
 export const LIQUIDATION_LOSS = 0.95;
 
 export interface Tick { asset: Asset; price: number; open24h: number; high24h: number; low24h: number; volume24h: number; ts: number }
+/** Top of the book: [price, size] levels, best first on both sides. */
+export interface Book { asset: Asset; bids: [number, number][]; asks: [number, number][]; ts: number }
 
 export interface Position {
   id: string; asset: Asset; side: "long" | "short"; marginCents: number; leverage: number;
